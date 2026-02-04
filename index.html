@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>未投稿フォルダ検索ツール</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .description {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .select-button {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 30px;
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .select-button:hover {
+            background-color: #45a049;
+        }
+
+        .select-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .results {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .results h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        .summary {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .summary.has-unpublished {
+            background-color: #fff3e0;
+        }
+
+        .folder-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #fafafa;
+            border-left: 4px solid #ff9800;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .folder-path {
+            font-weight: bold;
+            color: #333;
+            word-break: break-all;
+            margin-bottom: 10px;
+        }
+
+        .subfolder-list {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .subfolder-list li {
+            color: #666;
+            padding: 3px 0;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #4CAF50;
+            font-size: 18px;
+            padding: 40px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #ddd;
+            border-top-color: #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .copy-button {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            font-size: 14px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .copy-button:hover {
+            background-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <h1>未投稿フォルダ検索ツール</h1>
+    <p class="description">「【投稿済み】」フォルダがない場所を検索します</p>
+
+    <button id="selectFolder" class="select-button">フォルダを選択</button>
+
+    <div id="status" class="status"></div>
+
+    <div id="results" class="results" style="display: none;"></div>
+
+    <script>
+        const PUBLISHED_FOLDER_NAME = '【投稿済み】';
+
+        document.getElementById('selectFolder').addEventListener('click', async () => {
+            try {
+                // フォルダ選択ダイアログを表示
+                const dirHandle = await window.showDirectoryPicker();
+
+                document.getElementById('selectFolder').disabled = true;
+                document.getElementById('status').textContent = '検索中...';
+                document.getElementById('results').style.display = 'block';
+                document.getElementById('results').innerHTML = '<div class="loading"></div>';
+
+                // フォルダをスキャン
+                const unpublishedFolders = await scanFolder(dirHandle, '');
+
+                // 結果を表示
+                displayResults(unpublishedFolders, dirHandle.name);
+
+                document.getElementById('selectFolder').disabled = false;
+                document.getElementById('status').textContent = '';
+
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    // ユーザーがキャンセルした
+                    document.getElementById('status').textContent = '';
+                } else {
+                    console.error(err);
+                    document.getElementById('results').style.display = 'block';
+                    document.getElementById('results').innerHTML =
+                        `<div class="error">エラーが発生しました: ${err.message}</div>`;
+                }
+                document.getElementById('selectFolder').disabled = false;
+            }
+        });
+
+        async function scanFolder(dirHandle, path) {
+            const results = [];
+            const subfolders = [];
+            let hasPublishedFolder = false;
+
+            // フォルダ内のエントリを取得
+            for await (const entry of dirHandle.values()) {
+                if (entry.kind === 'directory') {
+                    if (entry.name === PUBLISHED_FOLDER_NAME) {
+                        hasPublishedFolder = true;
+                    } else {
+                        subfolders.push(entry);
+                    }
+                }
+            }
+
+            // サブフォルダがある場合のみチェック
+            if (subfolders.length > 0) {
+                if (!hasPublishedFolder) {
+                    // 【投稿済み】がない場合、未投稿として記録
+                    results.push({
+                        path: path || dirHandle.name,
+                        subfolders: subfolders.map(f => f.name).sort()
+                    });
+                }
+
+                // サブフォルダを再帰的にスキャン
+                for (const subfolder of subfolders) {
+                    const subPath = path ? `${path}/${subfolder.name}` : `${dirHandle.name}/${subfolder.name}`;
+                    const subResults = await scanFolder(subfolder, subPath);
+                    results.push(...subResults);
+                }
+            }
+
+            return results;
+        }
+
+        function displayResults(unpublishedFolders, rootName) {
+            const resultsDiv = document.getElementById('results');
+
+            if (unpublishedFolders.length === 0) {
+                resultsDiv.innerHTML = `
+                    <h2>検索結果: ${rootName}</h2>
+                    <div class="no-results">すべてのフォルダに「【投稿済み】」があります</div>
+                `;
+                return;
+            }
+
+            let html = `
+                <h2>検索結果: ${rootName}</h2>
+                <div class="summary has-unpublished">
+                    <strong>未投稿フォルダ数:</strong> ${unpublishedFolders.length}件
+                    <button class="copy-button" onclick="copyResults()">結果をコピー</button>
+                </div>
+            `;
+
+            for (const folder of unpublishedFolders) {
+                html += `
+                    <div class="folder-item">
+                        <div class="folder-path">${escapeHtml(folder.path)}</div>
+                        <ul class="subfolder-list">
+                            ${folder.subfolders.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            resultsDiv.innerHTML = html;
+
+            // グローバルに結果を保存（コピー用）
+            window.lastResults = unpublishedFolders;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function copyResults() {
+            if (!window.lastResults) return;
+
+            let text = '未投稿フォルダ一覧\n\n';
+            for (const folder of window.lastResults) {
+                text += `${folder.path}\n`;
+                for (const subfolder of folder.subfolders) {
+                    text += `  - ${subfolder}\n`;
+                }
+                text += '\n';
+            }
+
+            navigator.clipboard.writeText(text).then(() => {
+                alert('コピーしました');
+            }).catch(err => {
+                console.error('コピーに失敗しました:', err);
+            });
+        }
+    </script>
+</body>
+</html>
