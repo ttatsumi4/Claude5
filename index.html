@@ -289,6 +289,15 @@
 
     <script>
         const PUBLISHED_FOLDER_NAME = '【投稿済み】';
+        const STORAGE_KEY = 'unpublished-folder-finder-root-path';
+
+        // ページ読み込み時に保存されたルートパスを復元
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedPath = localStorage.getItem(STORAGE_KEY);
+            if (savedPath) {
+                document.getElementById('rootPath').value = savedPath;
+            }
+        });
 
         document.getElementById('selectFolder').addEventListener('click', async () => {
             try {
@@ -301,6 +310,9 @@
                 // ルートパスが空の場合はフォルダ名のみ使用
                 if (!rootPath) {
                     rootPath = dirHandle.name;
+                } else {
+                    // ルートパスをローカルストレージに保存
+                    localStorage.setItem(STORAGE_KEY, rootPath);
                 }
 
                 document.getElementById('selectFolder').disabled = true;
