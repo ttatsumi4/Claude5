@@ -102,12 +102,44 @@
 
         .subfolder-list {
             margin: 0;
-            padding-left: 20px;
+            padding-left: 0;
+            list-style: none;
         }
 
         .subfolder-list li {
             color: #666;
-            padding: 3px 0;
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .subfolder-name {
+            flex: 1;
+        }
+
+        .subfolder-name::before {
+            content: '- ';
+        }
+
+        .mini-copy-button {
+            padding: 3px 8px;
+            font-size: 11px;
+            background-color: #607D8B;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .mini-copy-button:hover {
+            background-color: #455A64;
+        }
+
+        .mini-copy-button.copied {
+            background-color: #4CAF50;
         }
 
         .no-results {
@@ -320,7 +352,7 @@
                             </div>
                         </div>
                         <ul class="subfolder-list">
-                            ${folder.subfolders.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
+                            ${folder.subfolders.map((f, j) => `<li><span class="subfolder-name">${escapeHtml(f)}</span><button class="mini-copy-button" onclick="copySubfolderPath(${i}, ${j}, this)">コピー</button></li>`).join('')}
                         </ul>
                     </div>
                 `;
@@ -365,6 +397,26 @@
             navigator.clipboard.writeText(path).then(() => {
                 const originalText = button.textContent;
                 button.textContent = 'コピー済み';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 1500);
+            }).catch(err => {
+                console.error('コピーに失敗しました:', err);
+            });
+        }
+
+        function copySubfolderPath(folderIndex, subfolderIndex, button) {
+            if (!window.lastResults || !window.lastResults[folderIndex]) return;
+
+            const folder = window.lastResults[folderIndex];
+            const subfolderName = folder.subfolders[subfolderIndex];
+            const fullPath = `${folder.path}/${subfolderName}`;
+
+            navigator.clipboard.writeText(fullPath).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'OK';
                 button.classList.add('copied');
                 setTimeout(() => {
                     button.textContent = originalText;
