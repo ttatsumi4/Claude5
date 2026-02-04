@@ -160,6 +160,51 @@
         .copy-button:hover {
             background-color: #1976D2;
         }
+
+        .folder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .folder-buttons {
+            display: flex;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+
+        .path-button {
+            padding: 5px 10px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .path-button.copy {
+            background-color: #9C27B0;
+            color: white;
+        }
+
+        .path-button.copy:hover {
+            background-color: #7B1FA2;
+        }
+
+        .path-button.copied {
+            background-color: #4CAF50;
+        }
+
+        .tip {
+            background-color: #e3f2fd;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #1565C0;
+        }
     </style>
 </head>
 <body>
@@ -255,16 +300,25 @@
 
             let html = `
                 <h2>検索結果: ${rootName}</h2>
+                <div class="tip">
+                    「パスをコピー」でコピーしたパスをエクスプローラのアドレスバーに貼り付けると、そのフォルダを開けます
+                </div>
                 <div class="summary has-unpublished">
                     <strong>未投稿フォルダ数:</strong> ${unpublishedFolders.length}件
-                    <button class="copy-button" onclick="copyResults()">結果をコピー</button>
+                    <button class="copy-button" onclick="copyResults()">全結果をコピー</button>
                 </div>
             `;
 
-            for (const folder of unpublishedFolders) {
+            for (let i = 0; i < unpublishedFolders.length; i++) {
+                const folder = unpublishedFolders[i];
                 html += `
                     <div class="folder-item">
-                        <div class="folder-path">${escapeHtml(folder.path)}</div>
+                        <div class="folder-header">
+                            <div class="folder-path">${escapeHtml(folder.path)}</div>
+                            <div class="folder-buttons">
+                                <button class="path-button copy" onclick="copyPath(${i}, this)">パスをコピー</button>
+                            </div>
+                        </div>
                         <ul class="subfolder-list">
                             ${folder.subfolders.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
                         </ul>
@@ -298,6 +352,24 @@
 
             navigator.clipboard.writeText(text).then(() => {
                 alert('コピーしました');
+            }).catch(err => {
+                console.error('コピーに失敗しました:', err);
+            });
+        }
+
+        function copyPath(index, button) {
+            if (!window.lastResults || !window.lastResults[index]) return;
+
+            const path = window.lastResults[index].path;
+
+            navigator.clipboard.writeText(path).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'コピー済み';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 1500);
             }).catch(err => {
                 console.error('コピーに失敗しました:', err);
             });
