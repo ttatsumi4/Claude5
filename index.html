@@ -164,7 +164,7 @@
 </head>
 <body>
     <h1>未投稿フォルダ検索ツール</h1>
-    <p class="description">「【投稿済み】」フォルダがない場所を検索します</p>
+    <p class="description">「【投稿済み】」フォルダと同じ階層にある未投稿フォルダを検索します</p>
 
     <button id="selectFolder" class="select-button">フォルダを選択</button>
 
@@ -224,22 +224,19 @@
                 }
             }
 
-            // サブフォルダがある場合のみチェック
-            if (subfolders.length > 0) {
-                if (!hasPublishedFolder) {
-                    // 【投稿済み】がない場合、未投稿として記録
-                    results.push({
-                        path: path || dirHandle.name,
-                        subfolders: subfolders.map(f => f.name).sort()
-                    });
-                }
+            // 【投稿済み】があり、かつ他のフォルダがある場合は未投稿として記録
+            if (hasPublishedFolder && subfolders.length > 0) {
+                results.push({
+                    path: path || dirHandle.name,
+                    subfolders: subfolders.map(f => f.name).sort()
+                });
+            }
 
-                // サブフォルダを再帰的にスキャン
-                for (const subfolder of subfolders) {
-                    const subPath = path ? `${path}/${subfolder.name}` : `${dirHandle.name}/${subfolder.name}`;
-                    const subResults = await scanFolder(subfolder, subPath);
-                    results.push(...subResults);
-                }
+            // サブフォルダを再帰的にスキャン（【投稿済み】以外）
+            for (const subfolder of subfolders) {
+                const subPath = path ? `${path}/${subfolder.name}` : `${dirHandle.name}/${subfolder.name}`;
+                const subResults = await scanFolder(subfolder, subPath);
+                results.push(...subResults);
             }
 
             return results;
@@ -251,7 +248,7 @@
             if (unpublishedFolders.length === 0) {
                 resultsDiv.innerHTML = `
                     <h2>検索結果: ${rootName}</h2>
-                    <div class="no-results">すべてのフォルダに「【投稿済み】」があります</div>
+                    <div class="no-results">未投稿フォルダはありません</div>
                 `;
                 return;
             }
