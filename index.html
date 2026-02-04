@@ -237,11 +237,49 @@
             font-size: 13px;
             color: #1565C0;
         }
+
+        .root-path-section {
+            max-width: 600px;
+            margin: 0 auto 20px;
+            text-align: center;
+        }
+
+        .root-path-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .root-path-section input {
+            width: 100%;
+            padding: 10px 15px;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        .root-path-section input:focus {
+            border-color: #4CAF50;
+        }
+
+        .root-path-hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <h1>未投稿フォルダ検索ツール</h1>
     <p class="description">「【投稿済み】」フォルダと同じ階層にある未投稿フォルダを検索します</p>
+
+    <div class="root-path-section">
+        <label for="rootPath">ルートパス（選択するフォルダのフルパス）:</label>
+        <input type="text" id="rootPath" placeholder="例: G:\マイドライブ\1_plamo">
+        <p class="root-path-hint">エクスプローラでフォルダを右クリック → パスのコピー で取得できます</p>
+    </div>
 
     <button id="selectFolder" class="select-button">フォルダを選択</button>
 
@@ -254,8 +292,16 @@
 
         document.getElementById('selectFolder').addEventListener('click', async () => {
             try {
+                // ルートパスを取得（末尾の\を削除）
+                let rootPath = document.getElementById('rootPath').value.trim().replace(/\\+$/, '');
+
                 // フォルダ選択ダイアログを表示
                 const dirHandle = await window.showDirectoryPicker();
+
+                // ルートパスが空の場合はフォルダ名のみ使用
+                if (!rootPath) {
+                    rootPath = dirHandle.name;
+                }
 
                 document.getElementById('selectFolder').disabled = true;
                 document.getElementById('status').textContent = '検索中...';
@@ -263,10 +309,10 @@
                 document.getElementById('results').innerHTML = '<div class="loading"></div>';
 
                 // フォルダをスキャン
-                const unpublishedFolders = await scanFolder(dirHandle, '');
+                const unpublishedFolders = await scanFolder(dirHandle, rootPath);
 
                 // 結果を表示
-                displayResults(unpublishedFolders, dirHandle.name);
+                displayResults(unpublishedFolders, rootPath);
 
                 document.getElementById('selectFolder').disabled = false;
                 document.getElementById('status').textContent = '';
@@ -304,14 +350,14 @@
             // 【投稿済み】があり、かつ他のフォルダがある場合は未投稿として記録
             if (hasPublishedFolder && subfolders.length > 0) {
                 results.push({
-                    path: path || dirHandle.name,
+                    path: path,
                     subfolders: subfolders.map(f => f.name).sort()
                 });
             }
 
             // サブフォルダを再帰的にスキャン（【投稿済み】以外）
             for (const subfolder of subfolders) {
-                const subPath = path ? `${path}/${subfolder.name}` : `${dirHandle.name}/${subfolder.name}`;
+                const subPath = `${path}\\${subfolder.name}`;
                 const subResults = await scanFolder(subfolder, subPath);
                 results.push(...subResults);
             }
@@ -343,16 +389,21 @@
 
             for (let i = 0; i < unpublishedFolders.length; i++) {
                 const folder = unpublishedFolders[i];
+                let subfolderItems = '';
+                for (let j = 0; j < folder.subfolders.length; j++) {
+                    const f = folder.subfolders[j];
+                    subfolderItems += `<li><span class="subfolder-name">${escapeHtml(f)}</span><button class="mini-copy-button" data-folder="${i}" data-subfolder="${j}">コピー</button></li>`;
+                }
                 html += `
                     <div class="folder-item">
                         <div class="folder-header">
                             <div class="folder-path">${escapeHtml(folder.path)}</div>
                             <div class="folder-buttons">
-                                <button class="path-button copy" onclick="copyPath(${i}, this)">パスをコピー</button>
+                                <button class="path-button copy" data-folder="${i}">パスをコピー</button>
                             </div>
                         </div>
                         <ul class="subfolder-list">
-                            ${folder.subfolders.map((f, j) => `<li><span class="subfolder-name">${escapeHtml(f)}</span><button class="mini-copy-button" onclick="copySubfolderPath(${i}, ${j}, this)">コピー</button></li>`).join('')}
+                            ${subfolderItems}
                         </ul>
                     </div>
                 `;
@@ -362,6 +413,19 @@
 
             // グローバルに結果を保存（コピー用）
             window.lastResults = unpublishedFolders;
+
+            // イベントリスナーを追加
+            resultsDiv.querySelectorAll('.path-button.copy').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    copyPath(parseInt(this.dataset.folder), this);
+                });
+            });
+
+            resultsDiv.querySelectorAll('.mini-copy-button').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    copySubfolderPath(parseInt(this.dataset.folder), parseInt(this.dataset.subfolder), this);
+                });
+            });
         }
 
         function escapeHtml(text) {
@@ -412,7 +476,7 @@
 
             const folder = window.lastResults[folderIndex];
             const subfolderName = folder.subfolders[subfolderIndex];
-            const fullPath = `${folder.path}/${subfolderName}`;
+            const fullPath = `${folder.path}\\${subfolderName}`;
 
             navigator.clipboard.writeText(fullPath).then(() => {
                 const originalText = button.textContent;
